@@ -57,7 +57,17 @@ public class JMXHarvester extends Harvester {
                 logger.debug("Found {} new MBeans.", addedMBeans.size());
 
                 for (final ObjectInstance instance : addedMBeans) {
-                    final MBeanInfo mBeanInfo = mBeanServerConnection.getMBeanInfo(instance.getObjectName());
+                    final MBeanInfo mBeanInfo;
+                    try {
+                        mBeanInfo = mBeanServerConnection.getMBeanInfo(instance.getObjectName());
+                    } catch (final InstanceNotFoundException e) {
+                        // We may get an InstanceNotFoundException if the mBean was
+                        // really short lived (such as for a repair job or similar)
+                        // and Cassandra unregistered it between the probe and this
+                        // instance being evaluated
+                        mBeans.remove(instance);
+                        continue;
+                    }
                     final Descriptor mBeanDescriptor = mBeanInfo.getDescriptor();
 
                     final String interfaceClassName = (String) mBeanDescriptor.getFieldValue(JMX.INTERFACE_CLASS_NAME_FIELD);
