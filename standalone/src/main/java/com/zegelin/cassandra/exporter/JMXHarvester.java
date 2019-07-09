@@ -33,7 +33,7 @@ public class JMXHarvester extends Harvester {
         addCollectorFactory(RemoteGossiperMBeanMetricFamilyCollector.factory(metadataFactory));
     }
 
-    private Set<ObjectInstance> currentMBeans = ImmutableSet.of();
+    private Set<ObjectInstance> currentMBeans = Sets.newHashSet();
 
     void reconcileMBeans() {
         try {
@@ -41,18 +41,19 @@ public class JMXHarvester extends Harvester {
 
             // unregister
             {
-                final Set<ObjectInstance> removedMBeans = Sets.difference(currentMBeans, mBeans);
+                final ImmutableSet<ObjectInstance> removedMBeans = Sets.difference(currentMBeans, mBeans).immutableCopy();
 
                 logger.debug("Removing {} old MBeans.", removedMBeans.size());
 
                 for (final ObjectInstance instance : removedMBeans) {
                     unregisterMBean(instance.getObjectName());
+                    currentMBeans.remove(instance);
                 }
             }
 
             // register
             {
-                final Set<ObjectInstance> addedMBeans = Sets.difference(mBeans, currentMBeans);
+                final ImmutableSet<ObjectInstance> addedMBeans = Sets.difference(mBeans, currentMBeans).immutableCopy();
 
                 logger.debug("Found {} new MBeans.", addedMBeans.size());
 
@@ -65,7 +66,6 @@ public class JMXHarvester extends Harvester {
                         // really short lived (such as for a repair job or similar)
                         // and Cassandra unregistered it between the probe and this
                         // instance being evaluated
-                        mBeans.remove(instance);
                         continue;
                     }
                     final Descriptor mBeanDescriptor = mBeanInfo.getDescriptor();
@@ -100,10 +100,9 @@ public class JMXHarvester extends Harvester {
                     }
 
                     registerMBean(mBeanProxy, objectName);
+                    currentMBeans.add(instance);
                 }
             }
-
-            currentMBeans = mBeans;
 
         } catch (final Throwable e) {
             logger.error("Failed to reconcile MBeans.", e);
